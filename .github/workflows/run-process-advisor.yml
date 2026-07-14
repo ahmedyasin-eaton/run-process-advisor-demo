@@ -49,12 +49,13 @@ jobs:
 
       - name: Get GitHub App token (for GHCR pull)
         id: app_token
-        uses: test-org-for-backstage/edge-devops-actions-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          application_id: ${{ secrets.APP_CLIENT_ID }}
-          application_private_key: ${{ secrets.APP_PRIVATE_KEY }}
-          application_installation_org: test-org-for-backstage
-          add_token_to_gitconfig: 'false'
+          app-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: test-org-for-backstage
+          permission-packages: read
+          permission-contents: read
 
       - name: Debug - inspect App token capabilities
         env:
