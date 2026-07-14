@@ -1,0 +1,66 @@
+name: Run-Process-Advisor-Demo
+run-name: ${{ github.workflow }}_${{ github.ref_name }}_${{ github.run_number }}.${{ github.run_attempt }}
+
+# Demo that mimics the real run-process-advisor.yml:
+#   1. A first job uses the org-owned composite action to mint a GitHub App token.
+#   2. A build job pulls a PRIVATE image from the org's GHCR.
+#
+# Key lesson reproduced here: a job-level `container:` is resolved BEFORE any step
+# runs, and a runtime App token cannot be handed to it via job outputs (masked
+# secrets are stripped). So the build job mints the App token in a STEP and uses
+# `docker login` + `docker run` instead of a job-level container.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  # Mirrors the "call-padv-composite-action" job: obtain a GitHub App token
+  # from the org-owned composite action.
+  get-app-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get GitHub App token
+        id: get_gh_app_token
+        uses: test-org-for-backstage/edge-devops-actions-github-app-token@v1
+        with:
+          application_id: ${{ secrets.APP_CLIENT_ID }}
+          application_private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          application_installation_org: test-org-for-backstage
+          add_token_to_gitconfig: 'false'
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+  # Mirrors the "build" job. Because the App token is minted at runtime, we do
+  # NOT use a job-level `container:`. We mint the token in a step, log in to
+  # GHCR, then run the private image with `docker run`.
+  build:
+    runs-on: ubuntu-latest
+    needs: get-app-token
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get GitHub App token (for GHCR pull)
+        id: app_token
+        uses: test-org-for-backstage/edge-devops-actions-github-app-token@v1
+        with:
+          application_id: ${{ secrets.APP_CLIENT_ID }}
+          application_private_key: ${{ secrets.APP_PRIVATE_KEY }}
+          application_installation_org: test-org-for-backstage
+          add_token_to_gitconfig: 'false'
+
+      - name: Log in to GHCR with the App token
+        run: echo "${{ steps.app_token.outputs.token }}" | docker login ghcr.io -u x-access-token --password-stdin
+
+      - name: Pull and run the private toolchain image
+        run: |
+          docker run --rm \
+            ghcr.io/test-org-for-backstage/demo-toolchain:1.0 \
+            cat /msg
