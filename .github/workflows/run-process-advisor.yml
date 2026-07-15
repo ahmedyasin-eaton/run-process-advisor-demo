@@ -54,8 +54,22 @@ jobs:
           app-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: test-org-for-backstage
-          permission-packages: read
-          permission-contents: read
+
+      - name: Debug - identify the App and its permissions
+        env:
+          TOKEN: ${{ steps.app_token.outputs.token }}
+          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
+          INSTALL_ID: ${{ steps.app_token.outputs.installation-id }}
+        run: |
+          echo "app-slug        = $APP_SLUG"
+          echo "installation-id = $INSTALL_ID"
+          echo "== Public permissions this App REQUESTS (from /apps/<slug>) =="
+          curl -s -H "Accept: application/vnd.github+json" "https://api.github.com/apps/$APP_SLUG" | \
+            python3 -c "import sys,json; d=json.load(sys.stdin); print(' permissions=',json.dumps(d.get('permissions',{})))" || true
+          echo "== Can THIS token read the package? =="
+          curl -s -o /tmp/pkg.json -w "package_api_http=%{http_code}\n" -H "Authorization: Bearer $TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/orgs/test-org-for-backstage/packages/container/demo-toolchain
+          cat /tmp/pkg.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(' visibility=',d.get('visibility'),' msg=',d.get('message'))" || true
 
       - name: Debug - inspect App token capabilities
         env:
